@@ -1,0 +1,17 @@
+{
+    "city": "南京市",
+    "weather": {
+        "city": "南京市",
+        "aqi": 88,
+        "temperature": 22,
+        "humidity": 45,
+        "condition": "网络异常-默认",
+        "forecast": [
+            {
+                "time": "12:00",
+                "temp": 22,
+                "humidity": 45
+            }
+        ]
+    }
+}
