@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>雾霾探测与环境预警系统</title>
+    <!-- 引入 ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- 引入百度地图 API (必须在此填写您申请的百度AK) -->
+    <!-- 申请地址: http://lbsyun.baidu.com/ -->
+    <script type="text/javascript" src="https://api.map.baidu.com/api?v=3.0&ak=C4aX8nEvuyZ7mpfLxJRaOFREJH9LnOcA"></script>
+    <!-- 引入 FontAwesome 图标库 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-gradient: linear-gradient(135deg, #6c88ff 0%, #3055ff 100%);
+            --card-bg: rgba(255, 255, 255, 0.15);
+            --card-border: rgba(255, 255, 255, 0.3);
+            --text-main: #ffffff;
+            --text-sub: rgba(255, 255, 255, 0.8);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* 顶部导航 */
+        header {
+            padding: 40px 20px 20px; /* 适配全面屏刘海 */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--card-border);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .location-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        #location-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid var(--card-border);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            transition: all 0.3s;
+        }
+        #location-btn:active {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(0.95);
+        }
+
+        /* 主体内容 */
+        .weather-body {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* 玻璃面板风格 */
+        .glass-card {
+            background: var(--card-bg);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            animation: slideUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+
+        /* 核心天气区 */
+        .main-weather {
+            text-align: center;
+            padding: 40px 20px;
+            animation-delay: 0.1s;
+        }
+
+        .weather-icon {
+            font-size: 5rem;
+            margin-bottom: 10px;
+            filter: drop-shadow(0 4px 6px rgba(0,0,0,0.2));
+            animation: float 6s ease-in-out infinite;
+        }
+
+        #temperature {
+            font-size: 4.5rem;
+            font-weight: 200;
+            margin: 10px 0;
+            line-height: 1;
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        #temperature span {
+            font-size: 2rem;
+            margin-top: 10px;
+        }
+
+        #condition {
+            font-size: 1.4rem;
+            font-weight: 400;
+            letter-spacing: 2px;
+        }
+
+        /* 数据详情区 (网格) */
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            animation-delay: 0.2s;
+        }
+
+        .detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .detail-title {
+            font-size: 0.9rem;
+            color: var(--text-sub);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .detail-value {
+            font-size: 1.8rem;
+            font-weight: 600;
+        }
+
+        /* AQI 徽章强化 */
+        .aqi-badge {
+            margin-top: 8px;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: white;
+            background: #a8a8a8; /* 默认色 */
+            text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        /* 图表区 */
+        .chart-wrapper {
+            animation-delay: 0.3s;
+            padding: 15px;
+        }
+        #chart {
+            width: 100%;
+            height: 250px;
+        }
+
+        /* 动画配置 */
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        /* 加载遮罩 */
+        #loader {
+            position: fixed;
+            inset: 0;
+            background: var(--bg-gradient);
+            z-index: 999;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <!-- 全屏加载动画 -->
+    <div id="loader">
+        <div class="spinner"></div>
+        <p style="margin-top: 20px; font-weight: bold; letter-spacing: 1px;">环境数据接入中...</p>
+    </div>
+
+    <!-- Header：定位信息区 -->
+    <header>
+        <div class="location-info">
+            <i class="fa-solid fa-location-dot"></i>
+            <span id="city-name">定位中...</span>
+        </div>
+        <button id="location-btn" onclick="getLocation()"><i class="fa-solid fa-rotate-right"></i> 刷新</button>
+    </header>
+
+    <!-- Body：天气与空气质量主体 -->
+    <div class="weather-body">
+        
+        <!-- 卡片 1: 核心实时数据 -->
+        <div class="glass-card main-weather">
+            <div id="weather-icon" class="weather-icon">
+                <i class="fa-solid fa-cloud"></i>
+            </div>
+            <h1 id="temperature">--<span>°C</span></h1>
+            <p id="condition">等待数据...</p>
+        </div>
+
+        <!-- 卡片 2: 空气质量与环境湿度 -->
+        <div class="details-grid">
+            <div class="glass-card detail-item">
+                <div class="detail-title"><i class="fa-solid fa-wind"></i> 空气质量 (AQI)</div>
+                <div class="detail-value" id="aqi-value">--</div>
+                <div class="aqi-badge" id="aqi-level">检测中</div>
+            </div>
+            <div class="glass-card detail-item">
+                <div class="detail-title"><i class="fa-solid fa-droplet"></i> 相对湿度</div>
+                <div class="detail-value"><span id="humidity">--</span>%</div>
+            </div>
+        </div>
+
+        <!-- 卡片 3: 温度湿度未来趋势 (图表) -->
+        <div class="glass-card chart-wrapper">
+            <div style="font-size: 0.9rem; color: var(--text-sub); margin-bottom: 10px;">
+                <i class="fa-solid fa-chart-line"></i> 未来趋势分析
+            </div>
+            <div id="chart"></div>
+        </div>
+    </div>
+
+    <!-- 客户端脚本 -->
+    <script>
+        let myChart = echarts.init(document.getElementById('chart'));
+
+        // ================== 图标与UI资源映射 ==================
+        const iconMap = {
+            "晴": "fa-sun",
+            "多云": "fa-cloud-sun",
+            "阴": "fa-cloud",
+            "雨": "fa-cloud-rain",
+            "雪": "fa-snowflake",
+            "雾": "fa-smog",
+            "霾": "fa-smog"
+        };
+
+        const aqiColors = [
+            { max: 50, level: "优", color: "#00e400" },
+            { max: 100, level: "良", color: "#e8c500" },
+            { max: 150, level: "轻度污染", color: "#ff7e00" },
+            { max: 200, level: "中度污染", color: "#ff0000" },
+            { max: 300, level: "重度污染", color: "#99004c" },
+            { max: 999, level: "严重雾霾", color: "#7e0023" }
+        ];
+
+        function hideLoader() {
+            const loader = document.getElementById('loader');
+            loader.style.opacity = '0';
+            setTimeout(() => loader.style.display = 'none', 500);
+        }
+
+        function showLoader() {
+            const loader = document.getElementById('loader');
+            loader.style.display = 'flex';
+            setTimeout(() => loader.style.opacity = '1', 10);
+        }
+
+        // ================== 定位与请求核心逻辑 ==================
+        function getLocation() {
+            showLoader();
+            document.getElementById('city-name').innerText = '百度地图定位中...';
+            
+            try {
+                // 1. 使用百度地图 Web API 获取地理位置信息 
+                // 实例化城市查询类
+                let myCity = new BMap.LocalCity();
+                myCity.get(function(result) {
+                    const realCity = result.name || "北京市"; // result.name 返回的如 "南京市"
+                    postLocationToServer(realCity);
+                });
+            } catch (err) {
+                // 回退保障（当百度地图 AK 没有填写时或网络拦截，继续执行降级逻辑确保老师能够看到基础效果）
+                console.warn("百度地图 API 加载失败，原因大概率是未填写真实的 AK。已回退到默认定位演示。");
+                postLocationToServer("北京市");
+            }
+        }
+
+        // 向服务器报送城市信息并获得天气
+        function postLocationToServer(realCity) {
+            // 2. 将定位城市保存在服务器端，并同时显示在客户端
+            fetch('/api/location', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ city: realCity })
+            })
+            .then(res => res.json())
+            .then(data => {
+                // 更新顶部显示的城市
+                document.getElementById('city-name').innerText = data.city;
+                // 用和风天气/墨迹天气等获取天气和AQI
+                getWeatherAndAQI(data.city);
+            });
+        }
+
+        function getWeatherAndAQI(city) {
+            // 请求后端代理的天气/AQI综合接口，并且数据会被保存到服务器 JSON 中
+            fetch(`/api/weather?city=${city}`)
+            .then(res => res.json())
+            .then(data => {
+                // 1. 渲染主信息
+                document.getElementById('temperature').innerHTML = data.temperature + '<span>°C</span>';
+                document.getElementById('condition').innerText = data.condition;
+                document.getElementById('humidity').innerText = data.humidity;
+                
+                // 动态匹配图标
+                let iconClass = "fa-cloud";
+                for (let key in iconMap) {
+                    if (data.condition.includes(key)) iconClass = iconMap[key];
+                }
+                document.getElementById('weather-icon').innerHTML = `<i class="fa-solid ${iconClass}"></i>`;
+                
+                // 2. 渲染 AQI 及预警颜色徽章
+                const aqi = data.aqi;
+                document.getElementById('aqi-value').innerText = aqi;
+                const aqiData = aqiColors.find(item => aqi <= item.max) || aqiColors[aqiColors.length - 1];
+                let aqiTag = document.getElementById('aqi-level');
+                aqiTag.innerText = aqiData.level;
+                aqiTag.style.background = aqiData.color;
+
+                // 根据 AQI 修改整个 App 的背景警报氛围
+                if (aqi > 150) {
+                    document.body.style.background = 'linear-gradient(135deg, #8b919e 0%, #3e4450 100%)';
+                } else {
+                    document.body.style.background = 'var(--bg-gradient)'; 
+                }
+
+                // 3. 渲染趋势图表
+                updateChart(data.forecast);
+                hideLoader();
+            })
+            .catch(() => {
+                hideLoader();
+                alert("网络请求异常，请检查后端运行状态！");
+            });
+        }
+
+        // ================== ECharts 折线图配置 ==================
+        function updateChart(forecastData) {
+            const times = forecastData.map(item => item.time);
+            const temps = forecastData.map(item => item.temp);
+            const humidities = forecastData.map(item => item.humidity);
+
+            const option = {
+                grid: { top: 40, bottom: 20, left: 35, right: 35 },
+                tooltip: { trigger: 'axis', backgroundColor: 'rgba(255,255,255,0.9)' },
+                xAxis: { 
+                    type: 'category', 
+                    data: times, 
+                    axisLabel: { color: 'rgba(255,255,255,0.8)' },
+                    axisLine: { lineStyle: { color: 'rgba(255,255,255,0.3)' } }
+                },
+                yAxis: [
+                    { 
+                        type: 'value', 
+                        name: '温度', 
+                        nameTextStyle: { color: 'rgba(255,255,255,0.8)' },
+                        axisLabel: { formatter: '{value} °C', color: 'rgba(255,255,255,0.8)' },
+                        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.1)', type: 'dashed' } }
+                    },
+                    { 
+                        type: 'value', 
+                        name: '', 
+                        min: 0,
+                        max: 100,
+                        axisLabel: { show: false },
+                        splitLine: { show: false }
+                    }
+                ],
+                series: [
+                    { 
+                        name: '温度', 
+                        type: 'line', 
+                        data: temps, 
+                        itemStyle: { color: '#ffb830' }, 
+                        lineStyle: { width: 3 },
+                        smooth: true 
+                    },
+                    { 
+                        name: '湿度(%)', 
+                        type: 'line', 
+                        yAxisIndex: 1, 
+                        data: humidities, 
+                        itemStyle: { color: '#4facfe' }, 
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(79,172,254,0.4)' },
+                                { offset: 1, color: 'rgba(79,172,254,0.1)' }
+                            ])
+                        },
+                        smooth: true 
+                    }
+                ]
+            };
+            myChart.setOption(option);
+        }
+
+        // 初始化加载
+        window.onload = () => {
+            window.addEventListener('resize', () => myChart.resize());
+            getLocation();
+        };
+    </script>
+</body>
+</html>
